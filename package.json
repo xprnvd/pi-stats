@@ -1,0 +1,56 @@
+{
+	"name": "pi-stats-poster",
+	"version": "0.1.0",
+	"description": "Year-to-date token poster for pi, ported from opencode's /stats TUI view.",
+	"type": "module",
+	"main": "index.ts",
+	"license": "MIT",
+	"author": "pd <xprnvd@users.noreply.github.com>",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/xprnvd/pi-stats.git"
+	},
+	"homepage": "https://github.com/xprnvd/pi-stats#readme",
+	"bugs": {
+		"url": "https://github.com/xprnvd/pi-stats/issues"
+	},
+	"keywords": [
+		"pi-package",
+		"pi",
+		"pi-coding-agent",
+		"stats",
+		"tokens",
+		"usage",
+		"opencode"
+	],
+	"files": [
+		"index.ts",
+		"poster.ts",
+		"calendar.ts",
+		"stats.ts",
+		"scan.ts",
+		"types.ts",
+		"README.md",
+		"LICENSE",
+		"NOTICE"
+	],
+	"pi": {
+		"extensions": [
+			"./index.ts"
+		]
+	},
+	"peerDependencies": {
+		"@earendil-works/pi-coding-agent": "*",
+		"@earendil-works/pi-tui": "*"
+	},
+	"devDependencies": {
+		"@earendil-works/pi-coding-agent": "1.3.0",
+		"@earendil-works/pi-tui": "1.3.0"
+	},
+	"scripts": {
+		"test": "node --experimental-strip-types verify.mjs"
+	},
+	"engines": {
+		"node": ">=22.18"
+	}
+}
