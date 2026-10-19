@@ -30,6 +30,7 @@
 		"stats.ts",
 		"scan.ts",
 		"types.ts",
+		"verify.mjs",
 		"README.md",
 		"LICENSE",
 		"NOTICE"

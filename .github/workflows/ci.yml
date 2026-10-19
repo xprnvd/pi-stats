@@ -6,6 +6,9 @@ on:
     tags: ["v*"]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -16,3 +19,35 @@ jobs:
           node-version: 24
       - run: npm install --no-audit --no-fund
       - run: npm test
+
+  publish:
+    # Publish to npm when a version tag is pushed. The tag must match the
+    # version in package.json, and the suite must be green.
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Required for npm provenance: it signs the tarball with the workflow's
+      # OIDC identity, so npm can attest which commit produced it.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - run: npm install --no-audit --no-fund
+      - name: Check the tag matches the package version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          version="$(node -p "require('./package.json').version")"
+          if [ "$tag" != "$version" ]; then
+            echo "tag $tag does not match package version $version" >&2
+            exit 1
+          fi
+      - run: npm test
+      # prepublishOnly runs the suite again as the publish gate.
+      - run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
