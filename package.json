@@ -1,6 +1,6 @@
 {
 	"name": "pi-stats-poster",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"description": "Year-to-date token poster for pi, ported from opencode's /stats TUI view.",
 	"type": "module",
 	"main": "index.ts",
@@ -31,6 +31,7 @@
 		"scan.ts",
 		"types.ts",
 		"verify.mjs",
+		"docs/poster.png",
 		"README.md",
 		"LICENSE",
 		"NOTICE"

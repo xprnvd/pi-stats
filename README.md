@@ -1,34 +1,12 @@
 # pi-stats-poster
 
+[![npm](https://img.shields.io/npm/v/pi-stats-poster.svg)](https://www.npmjs.com/package/pi-stats-poster)
+[![pi.dev](https://img.shields.io/badge/pi.dev%20package-blue)](https://pi.dev/packages/pi-stats-poster)
+
 A port of opencode's TUI `/stats` poster to [pi](https://pi.dev), the coding
 agent. Run `/stats` in interactive mode; `Escape`, `Ctrl+C` (or `q`) closes it.
 
-```
-    pi / stats                                                                    Jan – Oct 2026
-
-                                                ▀▀█
-                                                █▀ █
-
-                                       ██        ██████  ████
-                                     ████        ██  ██  ██  ██
-                                       ██        ██████  ████
-                                       ██            ██  ██  ██
-                                     ██████  ██  ██████  ████
-
-                                               TOKENS
-
-           Jan      Feb     Mar      Apr      May     Jun      Jul      Aug     Sep     Oct
-    M     · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · ■ ■ ■ · ■ ■
-    T     · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · ■ ■ ■ ■ · ■
-    W     · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · ■ · ■ · ■
-    T   · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · ■ ■ · ■ · ■
-    F   · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · ■ ■ · ■ · ■
-    S   · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · ■ ■ ■ · ■ ■ ■
-    S   · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · ■ ■ ■ · · ■ ■
-
-               13 days                          31                           333
-             best streak                   active days                     sessions
-```
+[![the /stats poster](docs/poster.png)](https://www.npmjs.com/package/pi-stats-poster)
 
 A block-digit token total, a GitHub-style activity calendar, and the best
 streak, active days and session count for the current year — computed from
