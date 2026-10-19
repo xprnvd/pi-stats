@@ -221,7 +221,10 @@ export function renderPoster(
 	const natural = cells.map((cell) => Math.max(...cell.map((line) => visibleWidth(line))))
 	const equal = Math.floor(width / cells.length)
 	if (natural.every((w) => w <= equal)) {
-		// opencode's justifyContent="space-around": equal columns, content centred.
+		// Three equal columns, each holding its content centred. opencode's
+		// `justifyContent="space-around"` instead keeps each cell at its
+		// natural width and spreads the slack as equal gaps, so the cells land
+		// at slightly different columns here than upstream.
 		sections.push([0, 1].map((row) => cells.map((cell) => column(cell[row]!, equal)).join("")))
 	} else if (natural.reduce((sum, w) => sum + w, 0) + cells.length <= width) {
 		// Columns would clip: give each cell its natural width and spread the

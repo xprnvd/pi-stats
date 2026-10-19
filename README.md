@@ -23,7 +23,7 @@ pi install git:github.com/xprnvd/pi-stats
 That tracks `main`. To pin a release:
 
 ```bash
-pi install git:github.com/xprnvd/pi-stats@v0.1.2
+pi install git:github.com/xprnvd/pi-stats@v0.1.3
 ```
 
 From npm:
@@ -133,6 +133,11 @@ pi's data model or renderer, not a redesign.
   get a wider field) and the first label sits flush against the day gutter with
   no gap at all. This port keeps upstream's field widths but centres each label
   inside its field, which evens the gaps out to 3-4 columns on either side.
+- **Metric spacing.** opencode's `justifyContent="space-around"` keeps each
+  of the three metric cells at its natural width and spreads the slack between
+  them as equal gaps, with half a gap at each end. This port uses three equal
+  columns with the content centred, so the cells land a column or two apart
+  from where upstream puts them. The labels never collide either way.
 - **The host.** opencode renders `/stats` as a full-screen page. pi hosts an
   extension in the input dock, so the poster is centred within the terminal
   rather than within a page, and on a terminal shorter than about 26 rows the
