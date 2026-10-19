@@ -37,3 +37,12 @@ assumes the five rows differ. The scanner checks run against a throwaway agent
 directory and cover stray files, fork de-duplication, fork classification,
 cache reuse, a corrupt cache and an aborted scan. The pi install path and the
 theme are resolved at run time, so a pi upgrade does not break the script.
+
+The scanner section ends with a ground-truth check: a second implementation of
+the counting rules, written against the raw session files rather than against
+the extension's code, re-derives every number and the two are compared. If the
+extension and the recount ever disagree, one of them is wrong.
+
+Releases go through `scripts/release.mjs`, which bumps the version, refreshes
+the lockfile and the pinned tag, and prints the git commands. See
+[releasing.md](releasing.md).

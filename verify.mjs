@@ -449,6 +449,14 @@ console.log("✓ pi mark renders when not compact, is suppressed when compact, u
 			"\n",
 		) + "\n",
 	)
+	// A session whose only activity is from last year: it is not a session.
+	writeFileSync(
+		join(sessions, "2026-01-01T00-00-00-004Z_s6.jsonl"),
+		[
+			header("s6"),
+			JSON.stringify({ type: "message", id: "m-old", timestamp: "2025-06-01T00:00:00.000Z", message: { role: "assistant", usage: { input: 999, output: 999, totalTokens: 1998, cost: { total: 0 } } } }),
+		].join("\n") + "\n",
+	)
 	writeFileSync(join(sessions, "stray.jsonl"), JSON.stringify({ type: "note", text: "not a session" }) + "\n")
 
 	const previousAgentDir = process.env.PI_CODING_AGENT_DIR
@@ -458,7 +466,7 @@ console.log("✓ pi mark renders when not compact, is suppressed when compact, u
 		assert.equal(scan1.problems.length, 0, "no problems in a clean tree")
 		// The stray file is skipped, and it must not leave an empty entry behind.
 		assert.equal(Object.values(scan1.files).filter((f) => !f).length, 0, "no undefined entries in the scan result")
-		assert.equal(Object.keys(scan1.files).length, 5, "five session files, the stray one skipped")
+		assert.equal(Object.keys(scan1.files).length, 6, "six session files, the stray one skipped")
 
 		const snap = buildSnapshot(scan1.files, Date.UTC(2026, 0, 5))
 		assert.equal(snap.sessions, 2, "the two root sessions are sessions")
@@ -475,6 +483,25 @@ console.log("✓ pi mark renders when not compact, is suppressed when compact, u
 			125 + 10 + 2 + 5 + 3 + 125,
 			"tokens: the forked copy is not counted twice, the unrelated session's copy is",
 		)
+
+		// The same numbers, counted again from the raw files by an independent
+		// implementation of the rules. If the two disagree, one of them is
+		// wrong - which is the point.
+		const truth = recount(join(agentDir, "sessions"), Date.UTC(2026, 0, 5))
+		assert.deepEqual(
+			{
+				sessions: snap.sessions,
+				subagents: snap.subagents,
+				steps: snap.steps,
+				prompts: snap.prompts,
+				activeDays: snap.activeDays,
+				streak: snap.streak,
+				tokens: totalTokens(snap.tokens),
+			},
+			truth,
+			"the extension's numbers match an independent recount of the raw files",
+		)
+		console.log("✓ the counted numbers match an independent recount of the raw session files")
 
 		// A second scan reuses the cache and returns the same numbers.
 		const scan2 = await scan({})
@@ -501,5 +528,172 @@ console.log("✓ pi mark renders when not compact, is suppressed when compact, u
 	}
 }
 console.log("✓ scanner: stray files skipped, forks and named sessions are subagents, fork copies de-duplicated, cache and abort handled")
+
+/**
+ * An independent recount of a session tree.
+ *
+ * This re-reads the raw session files and re-derives every number from the
+ * rules, without touching the extension's scanner or aggregator. If it and the
+ * extension disagree, one of them is wrong - which is the point of having it.
+ */
+function recount(root, now) {
+	const from = new Date(new Date(now).getFullYear(), 0, 1).getTime()
+	const paths = []
+	const walk = (dir) => {
+		for (const entry of readdirSync(dir, { withFileTypes: true })) {
+			const path = join(dir, entry.name)
+			if (entry.isDirectory()) walk(path)
+			else if (entry.isFile() && entry.name.endsWith(".jsonl")) paths.push(path)
+		}
+	}
+	walk(root)
+
+	const sessions = new Map()
+	for (const path of paths) {
+		const lines = readFileSync(path, "utf8").split("\n")
+		let header
+		let name
+		const records = []
+		const summaries = []
+		const prompts = []
+		for (const line of lines) {
+			if (!line.trim()) continue
+			let entry
+			try {
+				entry = JSON.parse(line)
+			} catch {
+				continue
+			}
+			if (entry.type === "session") {
+				header ??= entry
+				continue
+			}
+			if (entry.type === "session_info") {
+				name ??= entry.name
+				continue
+			}
+			if (entry.type === "compaction" || entry.type === "branch_summary") {
+				if (entry.usage) summaries.push([`${entry.type}:${entry.id}`, Date.parse(entry.timestamp), entry.usage])
+				continue
+			}
+			if (entry.type !== "message" || !entry.message) continue
+			const message = entry.message
+			const ts = Date.parse(message.timestamp ?? entry.timestamp)
+			if (message.role === "user") prompts.push([String(entry.id), ts])
+			else if (message.role === "assistant") records.push([String(entry.id), ts, message.usage ?? {}])
+		}
+		if (!header) continue
+		const id = String(header.id)
+		const parentPath = typeof header.parentSession === "string" ? header.parentSession : undefined
+		const parentId = parentPath ? sessionIdOfPath(parentPath) : undefined
+		const subagent =
+			/\/run-\d+\/session\.jsonl$/.test(path) ||
+			/\/forks\/[^/]+\.jsonl$/.test(path) ||
+			(typeof name === "string" && name.startsWith("subagent-"))
+		sessions.set(path, { id, parentId, subagent, records, summaries, prompts })
+	}
+
+	// Ancestry: a fork's ancestors hold the messages it copies.
+	const byId = new Map()
+	for (const [path, session] of sessions) byId.set(session.id, path)
+	const ancestorsOf = (session) => {
+		const out = new Set()
+		let parentId = session.parentId
+		const seen = new Set()
+		while (parentId && !seen.has(parentId)) {
+			seen.add(parentId)
+			const parentPath = byId.get(parentId)
+			if (!parentPath) break
+			out.add(parentPath)
+			parentId = sessions.get(parentPath).parentId
+		}
+		return out
+	}
+	const inherited = (session) => {
+		const ids = new Set()
+		for (const ancestorPath of ancestorsOf(session)) {
+			const ancestor = sessions.get(ancestorPath)
+			for (const [id] of ancestor.records) ids.add(id)
+			for (const [id] of ancestor.summaries) ids.add(id)
+			for (const [id] of ancestor.prompts) ids.add(id)
+		}
+		return ids
+	}
+
+	let steps = 0
+	let prompts = 0
+	let sessionsCount = 0
+	let subagentsCount = 0
+	let input = 0
+	let output = 0
+	let cacheRead = 0
+	let cacheWrite = 0
+	const days = new Set()
+	for (const [path, session] of sessions) {
+		const copies = inherited(session)
+		let inRange = false
+		for (const [id, ts, usage] of session.records) {
+			if (copies.has(id)) continue
+			if (!(ts >= from && ts < now)) continue
+			inRange = true
+			steps++
+			input += usage.input ?? 0
+			output += usage.output ?? 0
+			cacheRead += usage.cacheRead ?? 0
+			cacheWrite += usage.cacheWrite ?? 0
+			const day = new Date(ts)
+			days.add(`${day.getFullYear()}-${day.getMonth()}-${day.getDate()}`)
+		}
+		for (const [id, ts, usage] of session.summaries) {
+			if (copies.has(id)) continue
+			if (!(ts >= from && ts < now)) continue
+			inRange = true
+			input += usage.input ?? 0
+			output += usage.output ?? 0
+			cacheRead += usage.cacheRead ?? 0
+			cacheWrite += usage.cacheWrite ?? 0
+		}
+		for (const [id, ts] of session.prompts) {
+			if (copies.has(id)) continue
+			if (!(ts >= from && ts < now)) continue
+			inRange = true
+			if (!session.subagent) prompts++
+		}
+		if (!inRange) continue
+		if (session.subagent) subagentsCount++
+		else sessionsCount++
+	}
+
+	// The longest run of consecutive days.
+	const ordinals = [...days].map((d) => {
+		const [year, month, day] = d.split("-").map(Number)
+		return Math.floor(Date.UTC(year, month, day) / 86_400_000)
+	})
+	ordinals.sort((a, b) => a - b)
+	let streak = 0
+	let run = 0
+	for (let i = 0; i < ordinals.length; i++) {
+		run = i > 0 && ordinals[i] - ordinals[i - 1] === 1 ? run + 1 : 1
+		streak = Math.max(streak, run)
+	}
+
+	return {
+		sessions: sessionsCount,
+		subagents: subagentsCount,
+		steps,
+		prompts,
+		activeDays: days.size,
+		streak,
+		tokens: input + output + cacheRead + cacheWrite,
+	}
+}
+
+/** The session id inside `<timestamp>_<id>.jsonl`. */
+function sessionIdOfPath(path) {
+	const name = path.slice(path.lastIndexOf("/") + 1)
+	const underscore = name.lastIndexOf("_")
+	const id = underscore === -1 ? name : name.slice(underscore + 1)
+	return id.endsWith(".jsonl") ? id.slice(0, -".jsonl".length) : id
+}
 
 console.log("\nALL CHECKS PASSED")

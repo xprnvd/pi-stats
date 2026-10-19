@@ -19,15 +19,15 @@ pi-stats-poster → Settings → Trusted Publisher → GitHub Actions):
 
 To release:
 
-1. bump `version` in `package.json`, then `npm install` to refresh
-   `package-lock.json`
-2. update the pinned tag in the Install section of the
-   [README](../README.md#install)
-3. commit and push
-4. `git tag -a vX.Y.Z -m "vX.Y.Z" && git push origin main --follow-tags`
+1. `node scripts/release.mjs 0.2.0` — bumps `package.json`, refreshes
+   `package-lock.json` and the pinned tag in the
+   [README](../README.md#install), then prints the commands below
+2. `git add -A && git commit -m "Release v0.2.0"`
+3. `git tag -a v0.2.0 -m "v0.2.0" && git push origin main --follow-tags`
 
-where `vX.Y.Z` is the version you bumped in step 1 — the workflow refuses to
-publish a tag that does not match it.
+The script stops before the git commands: the commit, the tag and the push
+stay a human decision. It also reminds you to update the version in the vault
+note, which lives outside this repository.
 
 The tag runs CI, which publishes the version. The workflow refuses to publish
 if the tag does not match the version in `package.json`, and `npm test` gates
