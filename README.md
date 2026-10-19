@@ -48,7 +48,7 @@ That tracks `main`. To pin a release:
 pi install git:github.com/xprnvd/pi-stats@v0.1.0
 ```
 
-From npm, once it is published:
+From npm:
 
 ```bash
 pi install npm:pi-stats-poster
