@@ -51,6 +51,51 @@ function emptyTokens(): Tokens {
 	return { input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 }
 }
 
+const EMPTY_IDS: ReadonlySet<string> = new Set<string>()
+
+/**
+ * The ids each file inherits from an ancestor.
+ *
+ * A fork copies its parent's messages, compaction entries and prompts
+ * verbatim, so the copy is dropped and the ancestor keeps them. Ids that two
+ * unrelated sessions happen to share are not related by ancestry, so both are
+ * counted - pi's entry ids are unique within a session but only 32 bits wide.
+ */
+function inheritedIds(files: Record<string, CachedFile>): Map<string, Set<string>> {
+	const byId = new Map<string, CachedFile>()
+	for (const file of Object.values(files)) byId.set(file.sessionId, file)
+
+	const inherited = new Map<string, Set<string>>()
+	for (const [path, file] of Object.entries(files)) {
+		const ancestors: CachedFile[] = []
+		const seen = new Set<string>()
+		let parentId = file.parentSessionId
+		while (parentId && !seen.has(parentId)) {
+			seen.add(parentId)
+			const parent = byId.get(parentId)
+			if (!parent) break
+			ancestors.push(parent)
+			parentId = parent.parentSessionId
+		}
+		if (ancestors.length === 0) continue
+
+		const parentIds = new Set<string>()
+		for (const ancestor of ancestors) {
+			for (const [id] of ancestor.records ?? []) parentIds.add(id)
+			for (const [id] of ancestor.summaries ?? []) parentIds.add(id)
+			for (const [id] of ancestor.prompts ?? []) parentIds.add(id)
+		}
+		if (parentIds.size === 0) continue
+
+		const copies = new Set<string>()
+		for (const [id] of file.records ?? []) if (parentIds.has(id)) copies.add(id)
+		for (const [id] of file.summaries ?? []) if (parentIds.has(id)) copies.add(id)
+		for (const [id] of file.prompts ?? []) if (parentIds.has(id)) copies.add(id)
+		if (copies.size > 0) inherited.set(path, copies)
+	}
+	return inherited
+}
+
 export function buildSnapshot(files: Record<string, CachedFile>, now: number): SessionStatsInfo {
 	const range = yearToDate(now)
 	const dateKey = makeDateKey()
@@ -62,19 +107,24 @@ export function buildSnapshot(files: Record<string, CachedFile>, now: number): S
 	let sessions = 0
 	let subagents = 0
 
-	// A fork copies its parent's messages verbatim, so the same message id can
-	// appear in several files. opencode excludes fork-copied rows in SQL; here
-	// the first file to claim an id wins, which keeps the total correct.
-	const seen = new Set<string>()
+	// A fork copies its parent's messages, compaction entries and prompts
+	// verbatim, so the same id turns up in several files. opencode excludes
+	// fork-copied rows in SQL; here the ancestor keeps them and the copy is
+	// dropped.
+	//
+	// The de-duplication is scoped to a file's ancestry. pi's entry ids are
+	// unique inside a session but only 32 bits wide, so two unrelated
+	// sessions can collide by accident - those are different messages that
+	// happen to share an id, and both count.
+	const copies = inheritedIds(files)
 
-	// Deterministic order, so "first file wins" is stable between runs.
 	for (const path of Object.keys(files).sort()) {
 		const file = files[path]
 		if (!file) continue
+		const inherited = copies.get(path) ?? EMPTY_IDS
 		let inRange = false
 		for (const [id, ts, input, output, reasoning, cacheRead, cacheWrite, recordCost] of file.records ?? []) {
-			if (seen.has(id)) continue
-			seen.add(id)
+			if (inherited.has(id)) continue
 			if (ts < range.from || ts >= range.to) continue
 			inRange = true
 			steps++
@@ -90,8 +140,7 @@ export function buildSnapshot(files: Record<string, CachedFile>, now: number): S
 		// Compaction and branch-summary calls add to the token total but are not
 		// steps, matching opencode's handling of non-message usage events.
 		for (const [id, ts, input, output, reasoning, cacheRead, cacheWrite, recordCost] of file.summaries ?? []) {
-			if (seen.has(id)) continue
-			seen.add(id)
+			if (inherited.has(id)) continue
 			if (ts < range.from || ts >= range.to) continue
 			tokens.input += input
 			tokens.output += output
@@ -101,11 +150,7 @@ export function buildSnapshot(files: Record<string, CachedFile>, now: number): S
 			cost += recordCost
 		}
 		for (const [id, ts] of file.prompts ?? []) {
-			// A fork copies the parent's user messages verbatim, so the same
-			// message id turns up in several files. opencode excludes fork-copied
-			// rows in SQL; here the first file to claim an id wins.
-			if (seen.has(id)) continue
-			seen.add(id)
+			if (inherited.has(id)) continue
 			if (ts < range.from || ts >= range.to) continue
 			inRange = true
 			if (file.root) prompts++

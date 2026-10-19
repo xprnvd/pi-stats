@@ -11,21 +11,17 @@ import { join } from "node:path"
 import { getAgentDir } from "@earendil-works/pi-coding-agent"
 import type { CachedFile, PromptRecord, StatsCache, UsageRecord } from "./types.ts"
 
-const CACHE_VERSION = 4
+const CACHE_VERSION = 5
 
 /**
- * A subagent run persists as `<parent>/<child>/run-N/session.jsonl`.
- *
- * This path, not the `parentSession` header field, decides whether a file is a
- * session or a subagent. pi sets `parentSession` on two different things: a
- * forked session (written as a session file in the target directory, and under
- * a `forks/` subdirectory in older versions — opencode counts those as a
- * *session*, because opencode tracks forks with a separate `fork_session_id`
- * column and leaves `parent_id` NULL) and a subagent run. Older subagent runs
- * carry no `parentSession` at all, so the header field cannot be trusted in
- * either direction.
+ * A subagent run persists as `<parent>/<child>/run-N/session.jsonl`, and
+ * pi-subagents forks a context into `<parent>/forks/`. Both are subagent
+ * sessions, not user sessions.
  */
 const SUBAGENT_PATH = /\/run-\d+\/session\.jsonl$/
+const SUBAGENT_FORK_PATH = /\/forks\/[^/]+\.jsonl$/
+/** pi-subagents names the session it creates `subagent-<role>-<uuid>`. */
+const SUBAGENT_NAME = /^subagent-/
 
 export interface ScanOptions {
 	signal?: AbortSignal
@@ -90,6 +86,7 @@ async function parseFile(path: string, size: number, mtimeMs: number): Promise<C
 	const raw = await fs.readFile(path, "utf8")
 	const lines = raw.split("\n")
 	let header: Record<string, unknown> | undefined
+	let sessionName: string | undefined
 	const records: UsageRecord[] = []
 	const summaries: UsageRecord[] = []
 	const prompts: PromptRecord[] = []
@@ -104,6 +101,12 @@ async function parseFile(path: string, size: number, mtimeMs: number): Promise<C
 		}
 		if (entry.type === "session") {
 			header ??= entry
+			continue
+		}
+		// pi writes the session's display name here; pi-subagents names the
+		// sessions it creates `subagent-<role>-<uuid>`.
+		if (entry.type === "session_info" && typeof entry.name === "string") {
+			sessionName ??= entry.name
 			continue
 		}
 		// Compaction and branch summaries are model calls that never appear as a
@@ -124,9 +127,11 @@ async function parseFile(path: string, size: number, mtimeMs: number): Promise<C
 		// opencode counts every assistant row as a step, even one with no
 		// recorded usage, so an assistant message is always a step. It needs its
 		// own timestamp: a record dated 0 would fall outside the range and be
-		// dropped before the step was counted.
+		// dropped before the step was counted. A message with no timestamp at
+		// all cannot be placed, so it is skipped rather than dated 0.
 		const id = String(entry.id ?? `${path}#${records.length}`)
-		const ts = timestampOf(message.timestamp ?? entry.timestamp) ?? 0
+		const ts = timestampOf(message.timestamp ?? entry.timestamp)
+		if (ts === undefined) continue
 		records.push(
 			isUsage(message.usage)
 				? usageRecord(id, message.timestamp ?? entry.timestamp, message.usage)
@@ -136,7 +141,24 @@ async function parseFile(path: string, size: number, mtimeMs: number): Promise<C
 
 	if (!header) return undefined
 	const sessionId = typeof header.id === "string" ? header.id : path
-	return { size, mtimeMs, sessionId, root: !SUBAGENT_PATH.test(path), records, summaries, prompts }
+	const parentSessionId =
+		typeof header.parentSession === "string" ? sessionIdOfPath(header.parentSession) : undefined
+	const root =
+		!SUBAGENT_PATH.test(path) &&
+		!SUBAGENT_FORK_PATH.test(path) &&
+		!(sessionName && SUBAGENT_NAME.test(sessionName))
+	return { size, mtimeMs, sessionId, parentSessionId, sessionName, root, records, summaries, prompts }
+}
+
+/**
+ * The session id inside a session file path, `<timestamp>_<id>.jsonl`. pi
+ * records a fork's parent as the path of the file it was forked from.
+ */
+function sessionIdOfPath(path: string): string {
+	const name = path.slice(path.lastIndexOf("/") + 1)
+	const underscore = name.lastIndexOf("_")
+	const id = underscore === -1 ? name : name.slice(underscore + 1)
+	return id.endsWith(".jsonl") ? id.slice(0, -".jsonl".length) : id
 }
 
 function isUsage(value: unknown): value is Record<string, unknown> {
@@ -175,6 +197,9 @@ async function readCache(): Promise<StatsCache> {
 			// A hand-edited or truncated entry must not be able to break the view.
 			for (const entry of Object.values(parsed.files)) {
 				if (!entry || !Array.isArray(entry.records)) return { version: CACHE_VERSION, files: {} }
+				if (!entry.records.every((record) => Array.isArray(record) && record.length === 8)) {
+					return { version: CACHE_VERSION, files: {} }
+				}
 			}
 			return parsed
 		}

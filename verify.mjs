@@ -390,14 +390,20 @@ console.log("✓ pi mark renders when not compact, is suppressed when compact, u
 	const header = (id, extra = {}) => JSON.stringify({ type: "session", version: 3, id, timestamp: "2026-01-01T00:00:00.000Z", ...extra })
 	const assistant = (id, usage) =>
 		JSON.stringify({ type: "message", id, timestamp: "2026-01-02T00:00:00.000Z", message: { role: "assistant", usage } })
+	const user = (id) =>
+		JSON.stringify({ type: "message", id, timestamp: "2026-01-02T00:00:00.000Z", message: { role: "user" } })
+	const sessionInfo = (name) => JSON.stringify({ type: "session_info", id: "info", timestamp: "2026-01-01T00:00:01.000Z", name })
+	// pi names session files `<timestamp>_<session id>.jsonl`, and a fork
+	// records the path of the file it was forked from.
+	const rootPath = join(sessions, "2026-01-01T00-00-00-000Z_s1.jsonl")
+	mkdirSync(join(sessions, "forks"), { recursive: true })
 
-	// A root session, a subagent run, a fork of the root session, and a stray
-	// file that is not a session at all.
+	// A root session.
 	writeFileSync(
-		join(sessions, "root.jsonl"),
+		rootPath,
 		[
 			header("s1"),
-			JSON.stringify({ type: "message", id: "u1", timestamp: "2026-01-02T00:00:00.000Z", message: { role: "user" } }),
+			user("u1"),
 			assistant("m1", { input: 100, output: 20, cacheRead: 5, cacheWrite: 0, totalTokens: 125, cost: { total: 0.01 } }),
 			assistant("m2", { input: 7, output: 3, cacheRead: 0, cacheWrite: 0, totalTokens: 10, cost: { total: 0 } }),
 			// An assistant message with no recorded usage. opencode counts every
@@ -406,20 +412,42 @@ console.log("✓ pi mark renders when not compact, is suppressed when compact, u
 			JSON.stringify({ type: "message", id: "m-no-usage", timestamp: "2026-01-02T00:00:00.000Z", message: { role: "assistant" } }),
 		].join("\n") + "\n",
 	)
+	// A subagent run.
 	writeFileSync(
 		join(sessions, "child", "run-0", "session.jsonl"),
-		[header("s2", { parentSession: "root" }), assistant("m3", { input: 1, output: 1, totalTokens: 2, cost: { total: 0 } })].join(
+		[header("s2", { parentSession: rootPath }), assistant("m3", { input: 1, output: 1, totalTokens: 2, cost: { total: 0 } })].join(
 			"\n",
 		) + "\n",
 	)
+	// A forked subagent context: it copies the parent's messages and adds its
+	// own. The copies must not count twice, and it is a subagent, not a session.
 	writeFileSync(
-		join(sessions, "forks.jsonl"),
+		join(sessions, "forks", "2026-01-01T00-00-00-001Z_s3.jsonl"),
 		[
-			header("s3", { parentSession: "root" }),
-			// A verbatim copy of the parent's messages: these must not count twice.
+			header("s3", { parentSession: rootPath }),
+			sessionInfo("subagent-worker-9b11f4ed-1"),
+			user("u1"),
 			assistant("m1", { input: 100, output: 20, cacheRead: 5, cacheWrite: 0, totalTokens: 125, cost: { total: 0.01 } }),
 			assistant("m9", { input: 4, output: 1, totalTokens: 5, cost: { total: 0 } }),
+			user("u9"),
 		].join("\n") + "\n",
+	)
+	// A session pi-subagents named, in a normal location: the name is what
+	// marks it as a subagent.
+	writeFileSync(
+		join(sessions, "2026-01-01T00-00-00-002Z_s4.jsonl"),
+		[header("s4"), sessionInfo("subagent-oracle-c098fb7d-1"), assistant("m7", { input: 2, output: 1, totalTokens: 3, cost: { total: 0 } })].join(
+			"\n",
+		) + "\n",
+	)
+	// An unrelated session that happens to reuse a message id. pi's entry ids
+	// are 32 bits, so two unrelated sessions can collide; those are different
+	// messages and both count.
+	writeFileSync(
+		join(sessions, "2026-01-01T00-00-00-003Z_s5.jsonl"),
+		[header("s5"), user("u5"), assistant("m1", { input: 100, output: 20, cacheRead: 5, cacheWrite: 0, totalTokens: 125, cost: { total: 0.01 } })].join(
+			"\n",
+		) + "\n",
 	)
 	writeFileSync(join(sessions, "stray.jsonl"), JSON.stringify({ type: "note", text: "not a session" }) + "\n")
 
@@ -430,18 +458,22 @@ console.log("✓ pi mark renders when not compact, is suppressed when compact, u
 		assert.equal(scan1.problems.length, 0, "no problems in a clean tree")
 		// The stray file is skipped, and it must not leave an empty entry behind.
 		assert.equal(Object.values(scan1.files).filter((f) => !f).length, 0, "no undefined entries in the scan result")
-		assert.equal(Object.keys(scan1.files).length, 3, "three session files, the stray one skipped")
+		assert.equal(Object.keys(scan1.files).length, 5, "five session files, the stray one skipped")
 
 		const snap = buildSnapshot(scan1.files, Date.UTC(2026, 0, 5))
-		assert.equal(snap.sessions, 2, "the root session and its fork are sessions")
-		assert.equal(snap.subagents, 1, "the run-N session is a subagent")
-		assert.equal(snap.steps, 5, "five distinct assistant messages: the forked copy counts once, and a message with no usage still counts as a step")
-		assert.equal(snap.prompts, 1, "the forked prompt is not counted twice")
+		assert.equal(snap.sessions, 2, "the two root sessions are sessions")
+		assert.equal(snap.subagents, 3, "the run, the forked context and the named session are subagents")
+		assert.equal(
+			snap.steps,
+			7,
+			"seven steps: the forked copies are dropped, the copied id in the unrelated session is kept, and a message with no usage still counts",
+		)
+		assert.equal(snap.prompts, 2, "the forked prompt is not counted twice, and a subagent's own prompt is not a top-level prompt")
 		assert.equal(
 			totalTokens(snap.tokens),
-			// m1 (125) + m2 (10) + m3 (2) + m9 (5); the forked copy of m1 is counted once.
-			125 + 10 + 2 + 5,
-			"tokens: the forked copy is not counted twice",
+			// m1 (125) + m2 (10) + m3 (2) + m9 (5) + m7 (3) + the unrelated session's m1 (125).
+			125 + 10 + 2 + 5 + 3 + 125,
+			"tokens: the forked copy is not counted twice, the unrelated session's copy is",
 		)
 
 		// A second scan reuses the cache and returns the same numbers.
@@ -468,6 +500,6 @@ console.log("✓ pi mark renders when not compact, is suppressed when compact, u
 		rmSync(agentDir, { recursive: true, force: true })
 	}
 }
-console.log("✓ scanner: stray files skipped, forks are sessions, fork copies de-duplicated, cache and abort handled")
+console.log("✓ scanner: stray files skipped, forks and named sessions are subagents, fork copies de-duplicated, cache and abort handled")
 
 console.log("\nALL CHECKS PASSED")

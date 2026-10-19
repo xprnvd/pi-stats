@@ -56,7 +56,11 @@ export interface CachedFile {
 	size: number
 	mtimeMs: number
 	sessionId: string
-	/** True for a top-level session; false for a `run-N` subagent session. */
+	/** The session this file was forked from, when it was a fork. */
+	parentSessionId?: string
+	/** The session's display name, when it has one. */
+	sessionName?: string
+	/** True for a top-level session; false for a subagent session. */
 	root: boolean
 	/** Assistant model calls, in file order. */
 	records: UsageRecord[]
