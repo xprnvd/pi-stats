@@ -17,3 +17,23 @@ model or renderer, not a redesign. This page is part of the
 | Month labels | opencode left-aligns each label in its `span * 2` field, which leaves gaps of 0-7 columns and the first label flush against the day gutter. This port keeps the field widths and centres the labels, evening the gaps to 3-4 columns. |
 | Metric spacing | opencode's `space-around` keeps each cell at its natural width and spreads the slack as equal gaps. This port uses three equal columns, so the cells land a column or two from where upstream puts them. The labels never collide either way. |
 | The host | opencode renders `/stats` as a full-screen page. pi hosts an extension in the input dock, so the poster is centred within the terminal rather than a page, and on a terminal shorter than about 26 rows the metric labels are cut off. |
+
+## File map
+
+Each file in this package, and the opencode source it was ported from:
+
+| File | opencode source |
+| --- | --- |
+| `poster.ts` | `packages/tui/src/feature-plugins/system/stats.tsx`, `stats-data.ts` |
+| `calendar.ts` | `packages/util/src/activity-calendar.ts` |
+| `stats.ts` | `packages/core/src/session/stats.ts` |
+| `scan.ts` | replaces opencode's SQL query over `session_message` |
+| `types.ts` | `packages/schema/src/token-usage.ts` |
+| `index.ts` | pi-specific glue: the `/stats` command and the TUI view |
+
+`activityCalendar`, the block-digit glyph table, `statsNumber` and the metric
+order are reproduced unchanged; the calendar's UTC ordinal handling and
+Thursday month labels are load-bearing and were kept verbatim.
+
+The full reasoning for each difference is on this page. Back to the
+[pi-stats-poster README](../README.md).

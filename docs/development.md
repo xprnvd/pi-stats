@@ -2,6 +2,19 @@
 
 This section is part of the [pi-stats-poster README](../README.md).
 
+## Layout
+
+One file per job:
+
+- `index.ts` — registers the `/stats` command and hosts the TUI view
+- `poster.ts` — renders the poster
+- `calendar.ts` — draws the activity calendar
+- `stats.ts` — aggregates the scan into a snapshot
+- `scan.ts` — reads the session files and caches the parsed counts
+- `types.ts` — the data shapes the other files share
+- `verify.mjs` — the regression suite
+- `docs/` — this documentation
+
 ```bash
 npm install       # dev dependencies (the pi packages, needed by the test suite)
 npm test          # the regression suite
