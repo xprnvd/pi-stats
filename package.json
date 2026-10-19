@@ -48,7 +48,8 @@
 		"@earendil-works/pi-tui": "1.3.0"
 	},
 	"scripts": {
-		"test": "node --experimental-strip-types verify.mjs"
+		"test": "node --experimental-strip-types verify.mjs",
+		"prepublishOnly": "npm test"
 	},
 	"engines": {
 		"node": ">=22.18"
