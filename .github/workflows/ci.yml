@@ -13,31 +13,34 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
-      - run: npm install --no-audit --no-fund
+      - run: npm ci --no-audit --no-fund
       - run: npm test
 
   publish:
-    # Publish to npm when a version tag is pushed. The tag must match the
-    # version in package.json, and the suite must be green.
+    # Publish to npm when a version tag is pushed.
+    #
+    # Authentication is npm's trusted publishing: the npm CLI exchanges this
+    # workflow's OIDC identity for a short-lived publish token. There is no
+    # npm token in this repository, and nothing long-lived to leak or rotate.
     if: startsWith(github.ref, 'refs/tags/v')
     needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      # Required for npm provenance: it signs the tarball with the workflow's
-      # OIDC identity, so npm can attest which commit produced it.
+      # Required for the OIDC exchange.
       id-token: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
-      - run: npm install --no-audit --no-fund
+          package-manager-cache: false
+      - run: npm ci --no-audit --no-fund
       - name: Check the tag matches the package version
         run: |
           tag="${GITHUB_REF_NAME#v}"
@@ -48,6 +51,7 @@ jobs:
           fi
       - run: npm test
       # prepublishOnly runs the suite again as the publish gate.
+      # To switch to npm's staged flow (publish -> your 2FA approval), use
+      # `npm stage publish` here and allow only "npm stage publish" on the
+      # package's trusted publisher configuration.
       - run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

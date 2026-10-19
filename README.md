@@ -211,6 +211,33 @@ directory and cover stray files, fork de-duplication, fork classification,
 cache reuse, a corrupt cache and an aborted scan. The pi install path and the
 theme are resolved at run time, so a pi upgrade does not break the script.
 
+## Releasing
+
+Publishing uses npm's
+[trusted publishing](https://docs.npmjs.com/trusted-publishers): CI
+authenticates with the workflow's OIDC identity, so there is no npm token in
+this repository and nothing long-lived to rotate or leak. npm generates the
+provenance attestation automatically.
+
+The trust configuration lives on the package's npm page (Packages →
+pi-stats-poster → Settings → Trusted Publisher → GitHub Actions):
+
+| Field | Value |
+| --- | --- |
+| Organization or user | `xprnvd` |
+| Repository | `pi-stats` |
+| Workflow filename | `ci.yml` |
+
+To release:
+
+1. bump `version` in `package.json`
+2. commit and push
+3. `git tag -a v0.2.0 -m "v0.2.0" && git push origin main --follow-tags`
+
+The tag runs CI, which publishes the version. The workflow refuses to publish
+if the tag does not match the version in `package.json`, and `npm test` gates
+every publish.
+
 ## A note on the command name
 
 `/stats` is also the command of
