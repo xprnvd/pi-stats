@@ -16,9 +16,10 @@ when the terminal is too narrow to hold a full year.*
 
 ## What it shows
 
-- **The token total** — every assistant call this year, cache reads included.
-  Cache reads are counted, which is why the number is large. Reasoning tokens
-  already sit inside the output count, so they are not added twice.
+- **The token total** — every model call this year: assistant messages plus
+  compaction and branch summaries. Cache reads are counted, which is why the
+  number is large. Reasoning tokens already sit inside the output count, so
+  they are not added twice.
 - **The calendar** — a year of activity, one column per week, five shade
   levels.
 - **best streak / active days / sessions** — the longest run of consecutive
@@ -39,8 +40,8 @@ From git, tracking `main`:
 pi install git:github.com/xprnvd/pi-stats
 ```
 
-Add `@v0.1.6` to pin a release. To try it for one invocation without adding
-it to your settings:
+Add `@v0.1.7` to the git URL (or `@0.1.7` to the npm spec) to pin a release.
+To try it for one invocation without adding it to your settings:
 
 ```bash
 pi -e npm:pi-stats-poster
@@ -54,8 +55,8 @@ pi install /absolute/path/to/pi-stats
 
 ## Requirements
 
-pi 1.3.0 or newer. The poster reads your session history, so it shows
-something only once you have used pi.
+Built and tested against pi 1.3.0 or newer. The poster reads your session
+history, so it shows something only once you have used pi.
 
 ## Privacy
 
@@ -73,14 +74,16 @@ next run.
 - **`/stats` is also the command of
   [`preinpost/pi-stats`](https://www.npmjs.com/package/pi-stats)**, an
   unrelated pi package that aggregates usage as text instead of as a poster.
-  pi does not warn when two extensions register the same command — one of them
-  silently wins. Install one or the other, not both.
+  pi does not warn when two extensions register the same command — it renames
+  the duplicates, so with both installed you get `/stats:1` and `/stats:2` and
+  plain `/stats` stops working. Install one or the other, not both.
 - **The poster's total is not pi's footer total.** The formula matches pi's
   own, but pi's footer reads more sources; see the
   [differences table](docs/differences.md).
 - **Short terminals clip the metric labels.** Below roughly 26 rows the
-  `best streak / active days / sessions` row is cut off, because the poster
-  shares the screen with your prompt.
+  `best streak / active days / sessions` row is cut off, because the poster is
+  drawn in the input dock and shares the screen with the transcript and the
+  footer.
 
 ## Documentation
 

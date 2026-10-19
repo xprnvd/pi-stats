@@ -14,9 +14,10 @@ model or renderer, not a redesign. This page is part of the
 | Usage outside assistant messages | pi's per-session footer also counts tool results that carry their own `usage`, and `usage` entries. This port counts assistant messages and `compaction`/`branch_summary` entries. Tool-result usage usually belongs to a nested call that pi-subagents also records in the subagent's own session file, so counting it here would double-count it; `usage` entries come from pi's cache warmer. The poster's total can therefore sit slightly below the footer. |
 | Branding | opencode's `<Logo />` and `opencode.ai` footer are dropped, and the logo slot holds pi's own 4×4 startup mark. The mark keeps pi's fixed brand colours rather than following the theme, and pi's Apple Terminal fallback is reproduced. |
 | Layout | pi requires every rendered line to fit the terminal width, so lines are normalised to the poster width and clamped, and the three metrics fall back from equal columns to natural widths to stacking as the poster narrows. |
-| Month labels | opencode left-aligns each label in its `span * 2` field, which leaves gaps of 0-7 columns and the first label flush against the day gutter. This port keeps the field widths and centres the labels, evening the gaps to 3-4 columns. |
+| Month labels | opencode left-aligns each label in its `span * 2` field, which leaves gaps of 0-7 columns and the first label flush against the day gutter. This port keeps the field widths and centres the labels, splitting the same slack evenly — 2-3 columns before the label, 3-4 after. |
 | Metric spacing | opencode's `space-around` keeps each cell at its natural width and spreads the slack as equal gaps. This port uses three equal columns, so the cells land a column or two from where upstream puts them. The labels never collide either way. |
 | The host | opencode renders `/stats` as a full-screen page. pi hosts an extension in the input dock, so the poster is centred within the terminal rather than a page, and on a terminal shorter than about 26 rows the metric labels are cut off. |
+| Extras | opencode binds only `escape` to close the view. This port also accepts `Ctrl+C` and `q`, shows the scan's progress while it runs, and adds a note under the poster when session files could not be read. |
 
 ## File map
 

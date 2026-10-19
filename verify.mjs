@@ -400,6 +400,10 @@ console.log("✓ pi mark renders when not compact, is suppressed when compact, u
 			JSON.stringify({ type: "message", id: "u1", timestamp: "2026-01-02T00:00:00.000Z", message: { role: "user" } }),
 			assistant("m1", { input: 100, output: 20, cacheRead: 5, cacheWrite: 0, totalTokens: 125, cost: { total: 0.01 } }),
 			assistant("m2", { input: 7, output: 3, cacheRead: 0, cacheWrite: 0, totalTokens: 10, cost: { total: 0 } }),
+			// An assistant message with no recorded usage. opencode counts every
+			// assistant row as a step, so this one must count too - which needs
+			// its own timestamp, or it falls outside the range and is dropped.
+			JSON.stringify({ type: "message", id: "m-no-usage", timestamp: "2026-01-02T00:00:00.000Z", message: { role: "assistant" } }),
 		].join("\n") + "\n",
 	)
 	writeFileSync(
@@ -431,7 +435,7 @@ console.log("✓ pi mark renders when not compact, is suppressed when compact, u
 		const snap = buildSnapshot(scan1.files, Date.UTC(2026, 0, 5))
 		assert.equal(snap.sessions, 2, "the root session and its fork are sessions")
 		assert.equal(snap.subagents, 1, "the run-N session is a subagent")
-		assert.equal(snap.steps, 4, "four distinct assistant messages: the forked copy counts once")
+		assert.equal(snap.steps, 5, "five distinct assistant messages: the forked copy counts once, and a message with no usage still counts as a step")
 		assert.equal(snap.prompts, 1, "the forked prompt is not counted twice")
 		assert.equal(
 			totalTokens(snap.tokens),

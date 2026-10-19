@@ -18,7 +18,8 @@ const CACHE_VERSION = 4
  *
  * This path, not the `parentSession` header field, decides whether a file is a
  * session or a subagent. pi sets `parentSession` on two different things: a
- * forked session (`<parent>/forks/*.jsonl`, which opencode counts as a
+ * forked session (written as a session file in the target directory, and under
+ * a `forks/` subdirectory in older versions — opencode counts those as a
  * *session*, because opencode tracks forks with a separate `fork_session_id`
  * column and leaves `parent_id` NULL) and a subagent run. Older subagent runs
  * carry no `parentSession` at all, so the header field cannot be trusted in
@@ -121,9 +122,16 @@ async function parseFile(path: string, size: number, mtimeMs: number): Promise<C
 		}
 		if (message.role !== "assistant") continue
 		// opencode counts every assistant row as a step, even one with no
-		// recorded usage, so an assistant message is always a step.
+		// recorded usage, so an assistant message is always a step. It needs its
+		// own timestamp: a record dated 0 would fall outside the range and be
+		// dropped before the step was counted.
 		const id = String(entry.id ?? `${path}#${records.length}`)
-		records.push(isUsage(message.usage) ? usageRecord(id, message.timestamp ?? entry.timestamp, message.usage) : [id, 0, 0, 0, 0, 0, 0, 0])
+		const ts = timestampOf(message.timestamp ?? entry.timestamp) ?? 0
+		records.push(
+			isUsage(message.usage)
+				? usageRecord(id, message.timestamp ?? entry.timestamp, message.usage)
+				: [id, ts, 0, 0, 0, 0, 0, 0],
+		)
 	}
 
 	if (!header) return undefined

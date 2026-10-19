@@ -24,7 +24,10 @@ To release:
 2. update the pinned tag in the Install section of the
    [README](../README.md#install)
 3. commit and push
-4. `git tag -a v0.2.0 -m "v0.2.0" && git push origin main --follow-tags`
+4. `git tag -a vX.Y.Z -m "vX.Y.Z" && git push origin main --follow-tags`
+
+where `vX.Y.Z` is the version you bumped in step 1 — the workflow refuses to
+publish a tag that does not match it.
 
 The tag runs CI, which publishes the version. The workflow refuses to publish
 if the tag does not match the version in `package.json`, and `npm test` gates
