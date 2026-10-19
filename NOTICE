@@ -1,5 +1,5 @@
 pi-stats-poster
-Copyright (c) 2026 pd
+Copyright (c) 2026 xprnvd
 
 This product includes software ported from opencode
 (https://github.com/sst/opencode), which is licensed under the MIT License.
@@ -13,7 +13,9 @@ Ported components and their opencode sources:
 | `calendar.ts`         | `packages/util/src/activity-calendar.ts`                               |
 | `stats.ts`            | `packages/core/src/session/stats.ts`                                   |
 | `types.ts`            | `packages/schema/src/token-usage.ts`                                   |
+| `scan.ts`             | `packages/core/src/session/stats.ts` (replaces its SQL query over `session_message`) |
 | `poster.ts` (digits)  | the block-digit glyph table in `packages/tui/src/feature-plugins/system/stats.tsx` |
+| `index.ts`            | pi-specific glue (the `/stats` command and the TUI view); no upstream source |
 
 The opencode notice, reproduced verbatim as required by the MIT License:
 

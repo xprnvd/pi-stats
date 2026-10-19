@@ -23,7 +23,7 @@ pi install git:github.com/xprnvd/pi-stats
 That tracks `main`. To pin a release:
 
 ```bash
-pi install git:github.com/xprnvd/pi-stats@v0.1.0
+pi install git:github.com/xprnvd/pi-stats@v0.1.2
 ```
 
 From npm:
@@ -80,8 +80,8 @@ pi's data model or renderer, not a redesign.
 
 - **Storage.** opencode answers from SQLite. pi has no queryable store, so
   `scan.ts` reads the session JSONLs under `<agent dir>/sessions` and caches
-  per-file results keyed on size + mtime. A warm scan of ~530 files takes about
-  a second; a cold one a few seconds. The cache lives at
+  per-file results keyed on size + mtime. A warm scan of several hundred files
+  takes about a second; a cold one a few seconds. The cache lives at
   `<agent dir>/pi-stats/cache.json` and is rewritten atomically.
 - **De-duplication.** opencode excludes fork-copied rows in SQL
   (`fork_session_id`). pi copies a fork's messages verbatim into a new file, so
@@ -103,9 +103,18 @@ pi's data model or renderer, not a redesign.
   `output`. pi's does not: `Usage.reasoning` is documented as a subset of
   `output` ("`output` already includes these tokens"), and pi's own accounting
   (`core/usage-totals.js`) counts `input + output + cacheRead + cacheWrite`.
-  This port uses pi's formula, so the poster agrees with pi's own footer
-  instead of overstating the total by the reasoning tokens. The `reasoning`
-  value is still tracked in the snapshot, it is just not part of the total.
+  This port uses pi's formula, so the poster's total is computed the way pi
+  computes its own instead of overstating it by the reasoning tokens. The
+  `reasoning` value is still tracked in the snapshot, it is just not part of
+  the total.
+- **Usage recorded outside assistant messages.** pi's per-session footer sums
+  four sources: assistant messages, `compaction`/`branch_summary` entries,
+  tool results that carry their own `usage`, and `usage` entries. This port
+  counts the first two. Tool-result usage usually belongs to a nested model
+  call that pi-subagents also records in that subagent's own session file, so
+  counting it here would double-count it; `usage` entries are emitted by pi's
+  cache warmer. The poster's total can therefore sit slightly below the
+  footer in pi's own status line.
 - **Branding.** opencode's `<Logo />` and `opencode.ai` footer are dropped, and
   the logo slot is filled with pi's own 4×4 startup mark instead. pi's brand
   colours are hardcoded rather than theme-derived, so the mark is the one
@@ -160,8 +169,9 @@ progress while it runs.
 | `poster.ts` | `packages/tui/src/feature-plugins/system/stats.tsx`, `stats-data.ts` |
 | `calendar.ts` | `packages/util/src/activity-calendar.ts` |
 | `stats.ts` | `packages/core/src/session/stats.ts` |
-| `scan.ts` | replaces opencode's SQLite query over `session_message` |
+| `scan.ts` | replaces opencode's SQL query over `session_message` |
 | `types.ts` | `packages/schema/src/token-usage.ts` |
+| `index.ts` | pi-specific glue: the `/stats` command and the TUI view |
 
 `activityCalendar`, the block-digit glyph table, `statsNumber` and the metric
 order are reproduced unchanged; the calendar's UTC ordinal handling and
@@ -170,9 +180,12 @@ Thursday month labels are load-bearing and were kept verbatim.
 ## Development
 
 ```bash
-npm install       # dev dependencies (the pi packages, for the type checker)
+npm install       # dev dependencies (the pi packages, needed by the test suite)
 npm test          # the regression suite
 ```
+
+The package ships TypeScript source and is loaded by pi's extension loader;
+it is not a Node library, so it has no `main` entry point.
 
 `verify.mjs` diffs the renderer against opencode's own algorithms, copied
 verbatim into the script: block-digit content, a shared left edge across the
@@ -208,9 +221,11 @@ pi-stats-poster → Settings → Trusted Publisher → GitHub Actions):
 
 To release:
 
-1. bump `version` in `package.json`
-2. commit and push
-3. `git tag -a v0.2.0 -m "v0.2.0" && git push origin main --follow-tags`
+1. bump `version` in `package.json`, then `npm install` to refresh
+   `package-lock.json`
+2. update the pinned tag in the Install section above
+3. commit and push
+4. `git tag -a v0.2.0 -m "v0.2.0" && git push origin main --follow-tags`
 
 The tag runs CI, which publishes the version. The workflow refuses to publish
 if the tag does not match the version in `package.json`, and `npm test` gates
