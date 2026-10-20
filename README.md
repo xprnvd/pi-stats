@@ -40,7 +40,7 @@ From git, tracking `main`:
 pi install git:github.com/xprnvd/pi-stats
 ```
 
-Add `@v0.1.9` to the git URL (or `@0.1.9` to the npm spec) to pin a release.
+Add `@v0.1.10` to the git URL (or `@0.1.10` to the npm spec) to pin a release.
 To try it for one invocation without adding it to your settings:
 
 ```bash
